@@ -1,0 +1,37 @@
+# Backend
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/**/*.pyc
+backend/*.db
+backend/.env
+backend/venv/
+backend/env/
+backend/logs/
+backend/*.log
+
+# Frontend
+frontend/.next/
+frontend/node_modules/
+frontend/.env.local
+frontend/.env*.local
+frontend/.env
+frontend/logs/
+frontend/*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# PM2
+ecosystem.config.js
+*.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
