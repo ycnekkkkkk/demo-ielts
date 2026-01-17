@@ -67,3 +67,24 @@ Sau khi deploy, kiểm tra:
 - CORS cần được cấu hình đúng với frontend domain
 - In-memory storage sẽ mất dữ liệu khi restart (phù hợp cho demo/testing)
 
+## 🐛 Fix: Python 3.13 Compatibility Issue
+
+Nếu gặp lỗi build `pydantic-core` với Python 3.13:
+
+### Giải pháp 1: Sử dụng Python 3.12 (Khuyến nghị)
+
+File `runtime.txt` đã được set thành `python-3.12`. Railway sẽ tự động sử dụng Python 3.12.
+
+### Giải pháp 2: Cập nhật requirements.txt
+
+Đã cập nhật `requirements.txt` với các version mới hơn tương thích Python 3.13:
+- `pydantic>=2.10.0` (thay vì 2.5.0)
+- `fastapi>=0.115.0` (thay vì 0.104.1)
+- Các dependencies khác cũng đã được cập nhật
+
+### Giải pháp 3: Set Python version trong Railway
+
+1. Railway Settings → **Variables**
+2. Thêm: `PYTHON_VERSION=3.12`
+3. Hoặc trong **Settings** → **Build** → chọn Python 3.12
+
