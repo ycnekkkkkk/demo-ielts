@@ -1,8 +1,13 @@
 import os
 import time
-import google.generativeai as genai
+import warnings
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
+
+# Suppress deprecation warning for google.generativeai
+# TODO: Migrate to google.genai when stable
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+import google.generativeai as genai
 
 load_dotenv()
 

@@ -95,6 +95,19 @@ Hoặc chỉ định cụ thể frontend domain:
 2. Thêm: `CORS_ORIGINS=https://your-frontend-domain.com`
 3. Redeploy
 
+## ⚠️ Warning: google.generativeai Deprecated
+
+Nếu thấy warning:
+```
+FutureWarning: All support for the `google.generativeai` package has ended...
+```
+
+**Đây chỉ là warning, không phải lỗi.** Code vẫn hoạt động bình thường.
+
+- Warning đã được suppress trong code
+- Package `google.generativeai` vẫn hoạt động, chỉ là Google khuyến nghị chuyển sang `google.genai` trong tương lai
+- Có thể bỏ qua warning này cho đến khi migrate sang `google.genai` (khi package mới ổn định hơn)
+
 ## 🐛 Fix: Python 3.13 Compatibility Issue
 
 Nếu gặp lỗi build `pydantic-core` với Python 3.13:
