@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api'
 import SpeechRecorder from '@/components/SpeechRecorder'
@@ -155,7 +155,7 @@ function ListeningSection({ section, handleAnswerChange, level }: { section: any
   )
 }
 
-export default function TestPage() {
+function TestContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('sessionId')
@@ -594,6 +594,21 @@ export default function TestPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function TestPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <div className="text-xl text-gray-600">Đang tải đề thi...</div>
+        </div>
+      </div>
+    }>
+      <TestContent />
+    </Suspense>
   )
 }
 

@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 
 type TabType = 'overview' | 'ielts' | 'beyond'
 
-export default function ResultsPage() {
+function ResultsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('sessionId')
@@ -451,7 +451,7 @@ function ReadingAnalysis({ data }: { data: any }) {
             {Object.entries(data.question_type_analysis).map(([type, analysis]: [string, any]) => {
               // Handle if analysis is an object with score/correct/total/assessment
               let displayContent: React.ReactNode
-              
+
               if (typeof analysis === 'object' && analysis !== null && !Array.isArray(analysis)) {
                 // If it has score structure, render nicely
                 if ('score' in analysis || 'correct' in analysis || 'total' in analysis) {
@@ -480,7 +480,7 @@ function ReadingAnalysis({ data }: { data: any }) {
                 // String or other primitive
                 displayContent = <span className="text-gray-700 ml-2">{String(analysis || '')}</span>
               }
-              
+
               return (
                 <div key={type} className="bg-white p-3 rounded-lg">
                   <div className="font-medium text-blue-600 capitalize mb-1">{type.replace(/_/g, ' ')}</div>
@@ -657,7 +657,7 @@ function BeyondIELTSAnalysis({ data }: { data: any }) {
                 const displayValue = typeof value === 'object' && value !== null && !Array.isArray(value)
                   ? JSON.stringify(value, null, 2) // Show as formatted JSON
                   : String(value || '')
-                
+
                 return (
                   <div key={key} className="bg-gray-50 p-4 rounded-lg">
                     <div className="font-semibold mb-2 text-gray-700 capitalize text-sm">{key.replace(/_/g, ' ')}</div>
@@ -681,4 +681,19 @@ function getSectionTitle(section: string): string {
     vocabulary: '📖 Từ vựng',
   }
   return titles[section] || section
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <div className="text-xl text-gray-600">Đang tải kết quả...</div>
+        </div>
+      </div>
+    }>
+      <ResultsContent />
+    </Suspense>
+  )
 }

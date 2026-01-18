@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api'
 import { motion } from 'framer-motion'
@@ -24,7 +24,7 @@ const phases = [
   },
 ]
 
-export default function PhaseSelectionPage() {
+function PhaseSelectionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('sessionId')
@@ -157,6 +157,21 @@ export default function PhaseSelectionPage() {
         </button>
       </motion.div>
     </div>
+  )
+}
+
+export default function PhaseSelectionPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <div className="text-xl text-gray-600">Đang tải...</div>
+        </div>
+      </div>
+    }>
+      <PhaseSelectionContent />
+    </Suspense>
   )
 }
 
