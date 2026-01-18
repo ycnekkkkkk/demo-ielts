@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { motion } from 'framer-motion'
 import { apiClient } from '@/lib/api'
 import SpeechRecorder from '@/components/SpeechRecorder'
 import InteractiveSpeaking from '@/components/InteractiveSpeaking'
