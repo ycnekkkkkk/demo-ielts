@@ -8,6 +8,7 @@ interface UnifiedSpeakingProps {
     part3?: Array<{ id: number; question: string }>
     onAnswer: (key: string, answer: string) => void
     answers: { [key: string]: string }
+    onComplete?: () => void // Callback when all speaking questions are completed
 }
 
 interface SpeakingItem {
@@ -25,6 +26,7 @@ export default function UnifiedSpeaking({
     part3,
     onAnswer,
     answers,
+    onComplete,
 }: UnifiedSpeakingProps) {
     // Combine all parts into a single array
     const allQuestions: SpeakingItem[] = []
@@ -194,8 +196,13 @@ export default function UnifiedSpeaking({
                                     if (prevIndex < allQuestions.length - 1) {
                                         console.log('Moving from question', prevIndex + 1, 'to', prevIndex + 2)
                                         return prevIndex + 1
+                                    } else {
+                                        // Last question completed
+                                        console.log('All speaking questions completed!')
+                                        if (onComplete) {
+                                            onComplete()
+                                        }
                                     }
-                                    console.log('Already at last question, not moving')
                                     return prevIndex
                                 })
                             }, 1500) // Show loading for 1.5 seconds before moving to next question
@@ -565,8 +572,13 @@ export default function UnifiedSpeaking({
                     if (prevIndex < allQuestions.length - 1) {
                         console.log('Auto-submit: Moving from question', prevIndex + 1, 'to', prevIndex + 2)
                         return prevIndex + 1
+                    } else {
+                        // Last question completed
+                        console.log('Auto-submit: All speaking questions completed!')
+                        if (onComplete) {
+                            onComplete()
+                        }
                     }
-                    console.log('Auto-submit: Already at last question, not moving')
                     return prevIndex
                 })
             }, 1500) // Show loading for 1.5 seconds before moving to next question

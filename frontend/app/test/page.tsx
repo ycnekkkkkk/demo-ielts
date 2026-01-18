@@ -168,6 +168,7 @@ export default function TestPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [waitingForResults, setWaitingForResults] = useState(false)
+  const [speakingCompleted, setSpeakingCompleted] = useState(false)
 
   useEffect(() => {
     if (!sessionId) {
@@ -216,6 +217,7 @@ export default function TestPage() {
     setContent(null)
     setAnswers({})
     setSubmitting(false)  // Reset submitting state when phase changes
+    setSpeakingCompleted(false)  // Reset speaking completed state when phase changes
     loadSession()
   }, [sessionId, phaseParam, router])
 
@@ -456,6 +458,7 @@ export default function TestPage() {
               part3={content.speaking.part3}
               onAnswer={(key, answer) => handleAnswerChange(key, answer)}
               answers={answers}
+              onComplete={() => setSpeakingCompleted(true)}
             />
           </div>
         )}
@@ -546,6 +549,33 @@ export default function TestPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Speaking Completed Modal */}
+        {speakingCompleted && showSpeaking && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 text-center"
+            >
+              <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
+                <span className="text-4xl">✅</span>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-4">
+                Hoàn thành phần Speaking!
+              </h3>
+              <p className="text-gray-600 mb-6 text-lg">
+                Mời bạn đến với phần test tiếp theo
+              </p>
+              <button
+                onClick={() => setSpeakingCompleted(false)}
+                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg"
+              >
+                Tiếp tục →
+              </button>
+            </motion.div>
           </div>
         )}
 
