@@ -186,6 +186,15 @@ export default function UnifiedSpeaking({
                             // Save answer
                             if (currentQuestion) {
                                 onAnswer(currentQuestion.answerKey, finalTranscriptToSave)
+                                
+                                // If this is the last question, mark as completed immediately
+                                if (currentQuestionIndex === allQuestions.length - 1) {
+                                    console.log('Last question answered, marking as completed!')
+                                    setIsCompleted(true)
+                                    if (onComplete) {
+                                        onComplete()
+                                    }
+                                }
                             }
 
                             // Auto move to next question after a short delay
@@ -198,7 +207,7 @@ export default function UnifiedSpeaking({
                                         console.log('Moving from question', prevIndex + 1, 'to', prevIndex + 2)
                                         return prevIndex + 1
                                     } else {
-                                        // Last question completed
+                                        // Last question completed (already handled above, but keep for safety)
                                         console.log('All speaking questions completed!')
                                         setIsCompleted(true)
                                         if (onComplete) {
@@ -563,6 +572,15 @@ export default function UnifiedSpeaking({
             // Save answer
             if (currentQuestion && finalTranscript.length > 0) {
                 onAnswer(currentQuestion.answerKey, finalTranscript)
+                
+                // If this is the last question, mark as completed immediately
+                if (currentQuestionIndex === allQuestions.length - 1) {
+                    console.log('Auto-submit: Last question answered, marking as completed!')
+                    setIsCompleted(true)
+                    if (onComplete) {
+                        onComplete()
+                    }
+                }
             }
 
             // Auto move to next question after showing loading
@@ -575,7 +593,7 @@ export default function UnifiedSpeaking({
                         console.log('Auto-submit: Moving from question', prevIndex + 1, 'to', prevIndex + 2)
                         return prevIndex + 1
                     } else {
-                        // Last question completed
+                        // Last question completed (already handled above, but keep for safety)
                         console.log('Auto-submit: All speaking questions completed!')
                         setIsCompleted(true)
                         if (onComplete) {
@@ -697,6 +715,7 @@ export default function UnifiedSpeaking({
     }
 
     const isLastQuestion = currentQuestionIndex === allQuestions.length - 1
+    const hasAnsweredLastQuestion = isLastQuestion && currentQuestion && answers[currentQuestion.answerKey] && answers[currentQuestion.answerKey].trim().length > 0
 
     return (
         <div className="bg-blue-50 rounded-lg p-6">
@@ -720,7 +739,7 @@ export default function UnifiedSpeaking({
             )}
 
             <div className="bg-white rounded-lg p-6 mb-4 min-h-[200px] flex items-center justify-center">
-                {isCompleted ? (
+                {isCompleted || hasAnsweredLastQuestion ? (
                     <div className="text-center w-full">
                         <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
                             <span className="text-3xl">✅</span>
