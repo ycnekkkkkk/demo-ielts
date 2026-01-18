@@ -75,6 +75,7 @@ export default function UnifiedSpeaking({
     const [hasStarted, setHasStarted] = useState(false) // Track if user has started
     const [errorMessage, setErrorMessage] = useState<string>('') // Error message for user
     const [isSubmitting, setIsSubmitting] = useState(false) // Track when submitting answer
+    const [isCompleted, setIsCompleted] = useState(false) // Track if all questions are completed
     const recognitionRef = useRef<any>(null)
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
     const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -199,6 +200,7 @@ export default function UnifiedSpeaking({
                                     } else {
                                         // Last question completed
                                         console.log('All speaking questions completed!')
+                                        setIsCompleted(true)
                                         if (onComplete) {
                                             onComplete()
                                         }
@@ -575,6 +577,7 @@ export default function UnifiedSpeaking({
                     } else {
                         // Last question completed
                         console.log('Auto-submit: All speaking questions completed!')
+                        setIsCompleted(true)
                         if (onComplete) {
                             onComplete()
                         }
@@ -717,7 +720,22 @@ export default function UnifiedSpeaking({
             )}
 
             <div className="bg-white rounded-lg p-6 mb-4 min-h-[200px] flex items-center justify-center">
-                {!hasStarted ? (
+                {isCompleted ? (
+                    <div className="text-center w-full">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
+                            <span className="text-3xl">✅</span>
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                            Đã hoàn thành phần Speaking!
+                        </h3>
+                        <p className="text-gray-600 text-lg mb-4">
+                            Bạn đã trả lời xong tất cả câu hỏi
+                        </p>
+                        <p className="text-sm text-gray-500">
+                            Mời bạn tiếp tục với phần test tiếp theo
+                        </p>
+                    </div>
+                ) : !hasStarted ? (
                     <div className="text-center">
                         <p className="text-lg text-gray-700 mb-4">Ready to start the Speaking test?</p>
                         <p className="text-sm text-gray-500 mb-4">Click "Start" to begin. The AI will read the first question.</p>
