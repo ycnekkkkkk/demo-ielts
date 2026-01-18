@@ -186,7 +186,7 @@ export default function UnifiedSpeaking({
                             // Save answer
                             if (currentQuestion) {
                                 onAnswer(currentQuestion.answerKey, finalTranscriptToSave)
-                                
+
                                 // If this is the last question, mark as completed immediately
                                 if (currentQuestionIndex === allQuestions.length - 1) {
                                     console.log('Last question answered, marking as completed!')
@@ -572,7 +572,7 @@ export default function UnifiedSpeaking({
             // Save answer
             if (currentQuestion && finalTranscript.length > 0) {
                 onAnswer(currentQuestion.answerKey, finalTranscript)
-                
+
                 // If this is the last question, mark as completed immediately
                 if (currentQuestionIndex === allQuestions.length - 1) {
                     console.log('Auto-submit: Last question answered, marking as completed!')
@@ -818,12 +818,12 @@ export default function UnifiedSpeaking({
                 )}
             </div>
 
-            {transcript && !isRecording && (
+            {/* {transcript && !isRecording && (
                 <div className="mt-4 bg-gray-50 rounded p-3">
                     <p className="text-sm text-gray-600 mb-1">Your answer:</p>
                     <p className="text-gray-800">{transcript}</p>
                 </div>
-            )}
+            )} */}
         </div>
     )
 }
