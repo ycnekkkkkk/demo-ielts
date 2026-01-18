@@ -448,12 +448,46 @@ function ReadingAnalysis({ data }: { data: any }) {
         <div className="bg-blue-50 p-4 rounded-lg">
           <div className="font-semibold mb-3 text-gray-700">Phân tích theo dạng câu hỏi</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            {Object.entries(data.question_type_analysis).map(([type, analysis]: [string, any]) => (
-              <div key={type} className="bg-white p-3 rounded-lg">
-                <span className="font-medium text-blue-600 capitalize">{type.replace(/_/g, ' ')}:</span>
-                <span className="text-gray-700 ml-2">{analysis}</span>
-              </div>
-            ))}
+            {Object.entries(data.question_type_analysis).map(([type, analysis]: [string, any]) => {
+              // Handle if analysis is an object with score/correct/total/assessment
+              let displayContent: React.ReactNode
+              
+              if (typeof analysis === 'object' && analysis !== null && !Array.isArray(analysis)) {
+                // If it has score structure, render nicely
+                if ('score' in analysis || 'correct' in analysis || 'total' in analysis) {
+                  displayContent = (
+                    <div className="mt-1 space-y-1">
+                      {analysis.correct !== undefined && analysis.total !== undefined && (
+                        <div className="text-gray-600">
+                          Đúng: <span className="font-semibold text-green-600">{analysis.correct}</span> / {analysis.total}
+                        </div>
+                      )}
+                      {analysis.score !== undefined && (
+                        <div className="text-gray-600">
+                          Điểm: <span className="font-semibold text-blue-600">{typeof analysis.score === 'number' ? analysis.score.toFixed(1) : analysis.score}</span>
+                        </div>
+                      )}
+                      {analysis.assessment && (
+                        <div className="text-gray-700 mt-2 italic">{analysis.assessment}</div>
+                      )}
+                    </div>
+                  )
+                } else {
+                  // Other object, show as JSON
+                  displayContent = <span className="text-gray-700 ml-2">{JSON.stringify(analysis)}</span>
+                }
+              } else {
+                // String or other primitive
+                displayContent = <span className="text-gray-700 ml-2">{String(analysis || '')}</span>
+              }
+              
+              return (
+                <div key={type} className="bg-white p-3 rounded-lg">
+                  <div className="font-medium text-blue-600 capitalize mb-1">{type.replace(/_/g, ' ')}</div>
+                  {displayContent}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -618,12 +652,19 @@ function BeyondIELTSAnalysis({ data }: { data: any }) {
             onToggle={() => toggle(section)}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {Object.entries(data[section]).map(([key, value]: [string, any]) => (
-                <div key={key} className="bg-gray-50 p-4 rounded-lg">
-                  <div className="font-semibold mb-2 text-gray-700 capitalize text-sm">{key.replace(/_/g, ' ')}</div>
-                  <div className="text-gray-700 text-sm">{value}</div>
-                </div>
-              ))}
+              {Object.entries(data[section]).map(([key, value]: [string, any]) => {
+                // Handle if value is an object
+                const displayValue = typeof value === 'object' && value !== null && !Array.isArray(value)
+                  ? JSON.stringify(value, null, 2) // Show as formatted JSON
+                  : String(value || '')
+                
+                return (
+                  <div key={key} className="bg-gray-50 p-4 rounded-lg">
+                    <div className="font-semibold mb-2 text-gray-700 capitalize text-sm">{key.replace(/_/g, ' ')}</div>
+                    <div className="text-gray-700 text-sm whitespace-pre-wrap">{displayValue}</div>
+                  </div>
+                )
+              })}
             </div>
           </CollapsibleSection>
         )
