@@ -32,8 +32,20 @@ Trong Railway Dashboard → **Variables**, thêm:
 ```
 GEMINI_API_KEY=your_primary_api_key_here
 GEMINI_API_KEY_BACKUP=your_backup_api_key_here
-CORS_ORIGINS=https://your-frontend-domain.com
+CORS_ALLOW_ALL=true
 ```
+
+Hoặc nếu muốn chỉ định cụ thể origins:
+
+```
+GEMINI_API_KEY=your_primary_api_key_here
+GEMINI_API_KEY_BACKUP=your_backup_api_key_here
+CORS_ORIGINS=https://your-frontend-domain.com,https://another-domain.com
+```
+
+**Lưu ý**: 
+- `CORS_ALLOW_ALL=true` cho phép tất cả origins (phù hợp cho development/testing)
+- `CORS_ORIGINS` chỉ định cụ thể các origins được phép (an toàn hơn cho production)
 
 ## 📁 Cấu trúc Project
 
@@ -66,6 +78,22 @@ Sau khi deploy, kiểm tra:
 - Railway tự động set biến `$PORT`, không cần config
 - CORS cần được cấu hình đúng với frontend domain
 - In-memory storage sẽ mất dữ liệu khi restart (phù hợp cho demo/testing)
+
+## 🐛 Fix: CORS 400 Bad Request Error
+
+Nếu gặp lỗi `OPTIONS /api/sessions HTTP/1.1" 400 Bad Request`:
+
+### Giải pháp: Set CORS_ALLOW_ALL=true
+
+1. Railway Dashboard → **Variables**
+2. Thêm: `CORS_ALLOW_ALL=true`
+3. Redeploy
+
+Hoặc chỉ định cụ thể frontend domain:
+
+1. Railway Dashboard → **Variables**
+2. Thêm: `CORS_ORIGINS=https://your-frontend-domain.com`
+3. Redeploy
 
 ## 🐛 Fix: Python 3.13 Compatibility Issue
 
