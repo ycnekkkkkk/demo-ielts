@@ -7,6 +7,7 @@ import { apiClient } from '@/lib/api'
 import SpeechRecorder from '@/components/SpeechRecorder'
 import InteractiveSpeaking from '@/components/InteractiveSpeaking'
 import UnifiedSpeaking from '@/components/UnifiedSpeaking'
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 // Function to get audio playback rate based on level
 function getAudioRate(level: string): number {
@@ -264,6 +265,84 @@ function TestContent() {
       return { color: 'text-orange-600', message: `Exceeded ${current - max} words` }
     }
     return { color: 'text-green-600', message: 'Met target' }
+  }
+
+  // Component to render chart from structured data
+  const ChartRenderer = ({ chartData }: { chartData: any }) => {
+    if (!chartData || !chartData.type) {
+      return null
+    }
+
+    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6']
+    
+    // Prepare data for charts
+    const chartDataArray = chartData.labels?.map((label: string, idx: number) => ({
+      name: label,
+      value: chartData.data?.[idx] || 0
+    })) || []
+
+    if (chartData.type === 'pie' || (chartData.type === 'bar' && chartDataArray.length <= 6)) {
+      return (
+        <div className="w-full">
+          <h4 className="text-lg font-semibold mb-3 text-center">{chartData.title || 'Chart'}</h4>
+          <ResponsiveContainer width="100%" height={350}>
+            <PieChart>
+              <Pie
+                data={chartDataArray}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {chartDataArray.map((entry: any, index: number) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )
+    }
+
+    if (chartData.type === 'line') {
+      return (
+        <div className="w-full">
+          <h4 className="text-lg font-semibold mb-3 text-center">{chartData.title || 'Chart'}</h4>
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart data={chartDataArray}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" label={{ value: chartData.xAxis || '', position: 'insideBottom', offset: -5 }} />
+              <YAxis label={{ value: chartData.yAxis || '', angle: -90, position: 'insideLeft' }} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )
+    }
+
+    // Default to bar chart
+    return (
+      <div className="w-full">
+        <h4 className="text-lg font-semibold mb-3 text-center">{chartData.title || 'Chart'}</h4>
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart data={chartDataArray}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" label={{ value: chartData.xAxis || '', position: 'insideBottom', offset: -5 }} />
+            <YAxis label={{ value: chartData.yAxis || '', angle: -90, position: 'insideLeft' }} />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="value" fill="#3b82f6" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    )
   }
 
   const handleSubmit = async () => {
@@ -620,18 +699,26 @@ function TestContent() {
                   <div className="font-semibold mb-2 text-gray-800">Instructions:</div>
                   <div className="text-gray-700 mb-2">{content.writing.task1.instructions || "Summarise the information by selecting and reporting the main features, and make comparisons where relevant."}</div>
                 </div>
-                {content.writing.task1.chart_description && (
+                {(content.writing.task1.chart_data || content.writing.task1.chart_description) && (
                   <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-4">
-                    <div className="font-semibold text-blue-800 mb-2 flex items-center">
+                    <div className="font-semibold text-blue-800 mb-3 flex items-center">
                       <span className="mr-2">📊</span>
-                      Chart Description (Text Format)
+                      Chart Data
                     </div>
-                    <div className="text-gray-800 whitespace-pre-wrap bg-white p-3 rounded border border-blue-100">
-                      {content.writing.task1.chart_description}
-                    </div>
-                    <div className="text-xs text-gray-600 mt-2 italic">
-                      Note: This is a text description of the chart data. Use this information to write your response.
-                    </div>
+                    {content.writing.task1.chart_data ? (
+                      <div className="bg-white p-4 rounded border border-blue-100">
+                        <ChartRenderer chartData={content.writing.task1.chart_data} />
+                      </div>
+                    ) : content.writing.task1.chart_description ? (
+                      <div className="bg-white p-3 rounded border border-blue-100">
+                        <div className="text-sm text-gray-700 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                          {content.writing.task1.chart_description}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2 italic">
+                          Note: Chart data is provided as text. Analyze and describe the main features and trends.
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
                 <textarea
