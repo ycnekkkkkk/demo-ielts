@@ -39,7 +39,9 @@ allowed_origins = [
 
 # For Railway/deployment: if CORS_ALLOW_ALL is true OR no specific origins set, allow all
 if allow_all_origins or (not allowed_origins):
-    logger.info("CORS: Allowing all origins (CORS_ALLOW_ALL=true or no specific origins)")
+    logger.info(
+        "CORS: Allowing all origins (CORS_ALLOW_ALL=true or no specific origins)"
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -62,13 +64,14 @@ else:
 # Include routers
 app.include_router(router, prefix="/api", tags=["test-session"])
 
+
 # Add explicit OPTIONS handler for all routes (fallback - must be after routers)
 @app.options("/{full_path:path}")
 async def options_handler(request: Request, full_path: str):
     """Handle OPTIONS requests explicitly as fallback"""
     origin = request.headers.get("origin", "")
     logger.info(f"OPTIONS request to /{full_path} from origin: {origin}")
-    
+
     # Determine allowed origin
     if allow_all_origins or not allowed_origins:
         allowed_origin = "*"
@@ -76,7 +79,7 @@ async def options_handler(request: Request, full_path: str):
         allowed_origin = origin
     else:
         allowed_origin = allowed_origins[0] if allowed_origins else "*"
-    
+
     return JSONResponse(
         content={},
         headers={
@@ -84,7 +87,7 @@ async def options_handler(request: Request, full_path: str):
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
             "Access-Control-Allow-Headers": "*",
             "Access-Control-Max-Age": "3600",
-        }
+        },
     )
 
 

@@ -24,7 +24,7 @@ class TestGeneratorService:
         system_instruction = """You are an expert IELTS examiner. Generate test content in JSON format only."""
 
         prompt = f"""
-Generate an IELTS Listening & Speaking test for {level.value} level (Band {band}) in JSON format.
+Generate an IELTS Listening & Speaking test for {level.value} level (IELTS {band}) in JSON format.
 
 ### CONTENT REQUIREMENTS:
 1. LISTENING (20 mins, 4 sections, 5 questions/section):
@@ -33,6 +33,9 @@ Generate an IELTS Listening & Speaking test for {level.value} level (Band {band}
    - Sec 3: Academic conversation (Multiple choice/Short answer).
    - Sec 4: Academic lecture (Fill-blank/Matching).
    - MANDATORY: Each section must include a realistic 'audio_transcript' (250-300 words) containing all answers.
+   - CRITICAL: Each question must be UNIQUE and DIFFERENT. Do NOT repeat similar questions or test the same information point.
+   - Each question should test different aspects: main ideas, specific details, numbers, names, locations, dates, reasons, etc.
+   - IMPORTANT: For matching questions, provide 'options' array with choices like ["A. Option 1", "B. Option 2", "C. Option 3"].
 
 2. SPEAKING (10 mins):
    - Part 1: 3-4 Intro questions (hometown, study/work, etc.).
@@ -53,7 +56,7 @@ Generate an IELTS Listening & Speaking test for {level.value} level (Band {band}
             "id": 1,
             "type": "multiple_choice | fill_blank | matching | short_answer",
             "question": "string",
-            "options": ["A", "B", "C"], // Only for MC
+            "options": ["A", "B", "C"], // Required for MC and matching types
             "correct_answer": "string"
           }}
         ]
@@ -77,15 +80,27 @@ Generate an IELTS Listening & Speaking test for {level.value} level (Band {band}
         system_instruction = """You are an expert IELTS examiner. Generate test content in JSON format only."""
 
         prompt = f"""
-Generate an IELTS Reading & Writing test for {level.value} level (Band {band}) in JSON format.
+Generate an IELTS Reading & Writing test for {level.value} level (IELTS {band}) in JSON format.
 
 ### CONTENT REQUIREMENTS:
 1. READING (15 mins, 2 passages, 5 questions/passage):
    - Pass 1: Data/chart-based article (300-400 words). Questions: Multiple choice, True/False/Not Given.
    - Pass 2: Social topic article (300-400 words). Questions: Multiple choice, Matching Headings.
+   - CRITICAL: Each question must be UNIQUE and DIFFERENT. Do NOT repeat similar questions or test the same information point.
+   - Each question should test different aspects: main ideas, specific details, inferences, vocabulary, author's opinion, comparisons, etc.
+   - Ensure questions cover different parts of the passage, not the same paragraph or sentence.
+   - For True/False/Not Given: test different statements, not variations of the same fact.
+   - IMPORTANT: For matching_headings questions:
+     * If matching multiple paragraphs (e.g., "Match headings with paragraphs A-E"), provide:
+       - "items": ["A", "B", "C", "D", "E"] (list of paragraphs/items to match)
+       - "options": ["i. Heading 1", "ii. Heading 2", ...] (list of headings to choose from)
+     * If single matching, provide "options" array with headings like ["i. Introduction", "ii. Main findings", "iii. Conclusion"].
 
 2. WRITING (15 mins):
-   - Task 1 (50-80 words): Describe a chart. MANDATORY: Provide a 'chart_description' containing all raw data (type, title, labels, specific numbers, and key trends) so a student can write without seeing an image.
+   - Task 1 (50-80 words): Describe a chart. MANDATORY: 
+     * Provide 'chart_data' as JSON object with structure:
+       {{"type": "bar|line|pie", "title": "Chart Title", "labels": ["Label1", "Label2"], "data": [10, 20, 30], "xAxis": "X Label", "yAxis": "Y Label"}}
+     * Also provide 'chart_description' as text fallback with all raw data (type, title, labels, specific numbers, and key trends).
    - Task 2 (100-120 words): Social essay topic.
 
 ### OUTPUT JSON STRUCTURE:
@@ -101,8 +116,9 @@ Generate an IELTS Reading & Writing test for {level.value} level (Band {band}) i
             "id": 1,
             "type": "multiple_choice | tf_ng | matching_headings",
             "question": "string",
-            "options": ["A", "B", "C"], // Only for MC
-            "correct_answer": "string"
+            "options": ["i. Option 1", "ii. Option 2", "iii. Option 3"], // Required for MC and matching_headings types
+            "items": ["A", "B", "C"], // Optional: for matching_headings with multiple items (paragraphs)
+            "correct_answer": "string" // For matching_headings with items, use format: "A:i, B:ii, C:iii"
           }}
         ]
       }}
@@ -111,6 +127,7 @@ Generate an IELTS Reading & Writing test for {level.value} level (Band {band}) i
   "writing": {{
     "task1": {{
       "instructions": "Summarise the main features...",
+      "chart_data": {{"type": "bar", "title": "Chart Title", "labels": ["A", "B", "C"], "data": [10, 20, 30], "xAxis": "Category", "yAxis": "Value"}},
       "chart_description": "Detailed text data: [Type], [Title], [Data Points], [Trends]...",
       "word_limit": 50
     }},

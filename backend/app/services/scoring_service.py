@@ -76,60 +76,73 @@ class ScoringService:
 
     def compare_answers(self, user_answer: str, correct_answer: str) -> bool:
         """
-        Compare answers with flexible matching:
-        1. Exact match after normalization
-        2. Check if correct answer is contained in user answer (for longer responses)
-        3. Check if user answer is contained in correct answer
-        4. Word-by-word comparison for multi-word answers
+        Compare answers with strict matching:
+        1. Reject empty user answers immediately
+        2. Exact match after normalization
+        3. Check if correct answer is contained in user answer (for longer responses) - but only if user answer is meaningful
+        4. Word-by-word comparison for multi-word answers - but stricter
         """
+        # CRITICAL FIX: Reject empty or whitespace-only answers immediately
+        if not user_answer or not user_answer.strip():
+            return False
+
+        # CRITICAL FIX: Reject if correct answer is empty (shouldn't happen, but safety check)
+        if not correct_answer or not correct_answer.strip():
+            return False
+
         normalized_user = self.normalize_answer(user_answer)
         normalized_correct = self.normalize_answer(correct_answer)
 
-        # Case 1: Exact match
+        # CRITICAL FIX: After normalization, if user answer is empty, reject
+        if not normalized_user:
+            return False
+
+        # Case 1: Exact match (most reliable)
         if normalized_user == normalized_correct:
             return True
 
         # Case 2: If user wrote a longer sentence, check if correct answer is in it
         # Example: correct="london", user="the city is london" -> True
-        if len(normalized_user) > len(normalized_correct) * 1.5:
-            # User answer is significantly longer, check if correct answer is contained
-            if normalized_correct in normalized_user:
+        # BUT: Only if user answer is at least 2x longer (to avoid false matches)
+        if len(normalized_user) >= len(normalized_correct) * 2:
+            # Check if correct answer appears as a complete word/phrase
+            # Use word boundaries to avoid partial matches
+            # Create pattern that matches the correct answer as a whole word
+            pattern = r"\b" + re.escape(normalized_correct) + r"\b"
+            if re.search(pattern, normalized_user, re.IGNORECASE):
                 return True
-            # Also check word boundaries
+
+            # Also check if all words from correct answer are in user answer
             words_correct = set(normalized_correct.split())
             words_user = set(normalized_user.split())
-            # If all words from correct answer are in user answer
-            if words_correct and words_correct.issubset(words_user):
+            # If all words from correct answer are in user answer AND user has more words
+            if (
+                words_correct
+                and words_correct.issubset(words_user)
+                and len(words_user) > len(words_correct)
+            ):
                 return True
 
-        # Case 3: If correct answer is longer, check if user answer is in it
-        # Example: correct="london city", user="london" -> False (but could be True if needed)
-        # This is less common, but we'll check
-        if len(normalized_correct) > len(normalized_user) * 1.5:
-            if normalized_user in normalized_correct:
-                return True
-
-        # Case 4: Word-by-word comparison for multi-word answers
-        # Split into words and compare
+        # Case 3: Word-by-word comparison for multi-word answers - STRICTER
+        # Only if both have multiple words
         words_user = set(normalized_user.split())
         words_correct = set(normalized_correct.split())
 
-        # If both have multiple words, check if they share significant overlap
         if len(words_user) > 1 and len(words_correct) > 1:
-            # Calculate overlap ratio
+            # Calculate overlap ratio - but require HIGHER threshold (90% instead of 80%)
             intersection = words_user.intersection(words_correct)
             union = words_user.union(words_correct)
             if union:
                 overlap_ratio = len(intersection) / len(union)
-                # If more than 80% overlap, consider it correct
-                if overlap_ratio >= 0.8:
+                # CRITICAL FIX: Require 90% overlap (was 80%) and same number of words
+                if overlap_ratio >= 0.9 and len(words_user) == len(words_correct):
                     return True
 
-        # Case 5: Fuzzy matching for typos (simple Levenshtein-like check)
-        # Only for short answers (1-3 words) to avoid false positives
-        if len(normalized_correct.split()) <= 3 and len(normalized_user.split()) <= 3:
+        # Case 4: Fuzzy matching for typos - STRICTER
+        # Only for very short answers (1-2 words) and require 95% similarity (was 85%)
+        if len(normalized_correct.split()) <= 2 and len(normalized_user.split()) <= 2:
             # Simple character-based similarity
-            if self._simple_similarity(normalized_user, normalized_correct) >= 0.85:
+            if self._simple_similarity(normalized_user, normalized_correct) >= 0.95:
                 return True
 
         return False
@@ -192,12 +205,45 @@ class ScoringService:
 
         raw_score = correct_count
 
-        # Check if user provided any answers
+        # Check if user provided any answers (non-empty)
         has_any_answer = any(
             answers.get(f"listening_s{section.get('id')}_q{q.get('id')}", "").strip()
             for section in sections
             for q in section.get("questions", [])
         )
+
+        # CRITICAL FIX: Also check if raw_score matches total_questions (perfect score)
+        # If user got perfect score but we know they left blanks, something is wrong
+        # Double-check: if raw_score = total_questions, verify all answers are non-empty
+        if raw_score == total_questions and total_questions > 0:
+            # Verify all answers are actually provided and non-empty
+            all_answers_provided = all(
+                bool(
+                    answers.get(
+                        f"listening_s{section.get('id')}_q{q.get('id')}", ""
+                    ).strip()
+                )
+                for section in sections
+                for q in section.get("questions", [])
+            )
+            # If not all answers provided but got perfect score, something is wrong
+            if not all_answers_provided:
+                print(
+                    f"WARNING: Perfect score but missing answers! raw_score={raw_score}, total={total_questions}"
+                )
+                # Recalculate - this shouldn't happen with fixed compare_answers, but safety check
+                raw_score = 0
+                for section in sections:
+                    for question in section.get("questions", []):
+                        qid = question.get("id")
+                        user_answer = answers.get(
+                            f"listening_s{section.get('id')}_q{qid}", ""
+                        )
+                        if not user_answer or not user_answer.strip():
+                            continue  # Skip empty answers
+                        correct_answer = str(question.get("correct_answer", ""))
+                        if self.compare_answers(user_answer, correct_answer):
+                            raw_score += 1
 
         # Logic:
         # - No answers → 0.0
@@ -233,33 +279,175 @@ class ScoringService:
 
             for question in questions:
                 qid = question.get("id")
-                total_questions += 1
-                user_answer = answers.get(f"reading_p{passage_id}_q{qid}", "")
-                correct_answer = str(question.get("correct_answer", ""))
+                question_type = question.get("type", "")
+                items = question.get("items", [])
 
-                # Use flexible comparison that handles variations
-                is_correct = self.compare_answers(user_answer, correct_answer)
-                if is_correct:
-                    correct_count += 1
+                # Handle multi-item matching (e.g., matching headings with paragraphs A-E)
+                if items and len(items) > 0:
+                    # Each item is scored separately
+                    correct_answer_str = str(question.get("correct_answer", ""))
+                    # Parse correct_answer format: "A:i, B:ii, C:iii" or similar
+                    correct_answers_dict = {}
+                    if correct_answer_str:
+                        # Parse format like "A:i, B:ii, C:iii"
+                        pairs = [p.strip() for p in correct_answer_str.split(",")]
+                        for pair in pairs:
+                            if ":" in pair:
+                                item, answer = pair.split(":", 1)
+                                correct_answers_dict[item.strip()] = answer.strip()
 
-                detailed_results.append(
-                    {
-                        "question_id": qid,
-                        "passage_id": passage_id,
-                        "user_answer": user_answer,
-                        "correct_answer": correct_answer,
-                        "is_correct": is_correct,
-                    }
-                )
+                    # Score each item
+                    for item in items:
+                        total_questions += 1
+                        answer_key = f"reading_p{passage_id}_q{qid}_{item}"
+                        user_answer = answers.get(answer_key, "")
+                        correct_answer = correct_answers_dict.get(item, "")
+
+                        is_correct = (
+                            self.compare_answers(user_answer, correct_answer)
+                            if correct_answer
+                            else False
+                        )
+                        if is_correct:
+                            correct_count += 1
+
+                        detailed_results.append(
+                            {
+                                "question_id": qid,
+                                "item": item,
+                                "passage_id": passage_id,
+                                "user_answer": user_answer,
+                                "correct_answer": correct_answer,
+                                "is_correct": is_correct,
+                            }
+                        )
+                else:
+                    # Single answer question
+                    total_questions += 1
+                    user_answer = answers.get(f"reading_p{passage_id}_q{qid}", "")
+                    correct_answer = str(question.get("correct_answer", ""))
+
+                    # Use flexible comparison that handles variations
+                    is_correct = self.compare_answers(user_answer, correct_answer)
+                    if is_correct:
+                        correct_count += 1
+
+                    detailed_results.append(
+                        {
+                            "question_id": qid,
+                            "passage_id": passage_id,
+                            "user_answer": user_answer,
+                            "correct_answer": correct_answer,
+                            "is_correct": is_correct,
+                        }
+                    )
 
         raw_score = correct_count
 
-        # Check if user provided any answers
-        has_any_answer = any(
-            answers.get(f"reading_p{passage.get('id')}_q{q.get('id')}", "").strip()
-            for passage in passages
-            for q in passage.get("questions", [])
-        )
+        # Check if user provided any answers (non-empty)
+        # Handle both single and multi-item questions
+        has_any_answer = False
+        for passage in passages:
+            for q in passage.get("questions", []):
+                qid = q.get("id")
+                passage_id = passage.get("id")
+                items = q.get("items", [])
+
+                if items and len(items) > 0:
+                    # Check if any item has an answer
+                    for item in items:
+                        answer_key = f"reading_p{passage_id}_q{qid}_{item}"
+                        if answers.get(answer_key, "").strip():
+                            has_any_answer = True
+                            break
+                    if has_any_answer:
+                        break
+                else:
+                    # Single answer question
+                    if answers.get(f"reading_p{passage_id}_q{qid}", "").strip():
+                        has_any_answer = True
+                        break
+            if has_any_answer:
+                break
+
+        # CRITICAL FIX: Also check if raw_score matches total_questions (perfect score)
+        # If user got perfect score but we know they left blanks, something is wrong
+        # Double-check: if raw_score = total_questions, verify all answers are non-empty
+        if raw_score == total_questions and total_questions > 0:
+            # Verify all answers are actually provided and non-empty
+            # Handle both single and multi-item questions
+            all_answers_provided = True
+            for passage in passages:
+                for q in passage.get("questions", []):
+                    qid = q.get("id")
+                    passage_id = passage.get("id")
+                    items = q.get("items", [])
+
+                    if items and len(items) > 0:
+                        # Check all items have answers
+                        for item in items:
+                            answer_key = f"reading_p{passage_id}_q{qid}_{item}"
+                            if not answers.get(answer_key, "").strip():
+                                all_answers_provided = False
+                                break
+                        if not all_answers_provided:
+                            break
+                    else:
+                        # Single answer question
+                        if not answers.get(f"reading_p{passage_id}_q{qid}", "").strip():
+                            all_answers_provided = False
+                            break
+                if not all_answers_provided:
+                    break
+
+            # If not all answers provided but got perfect score, something is wrong
+            if not all_answers_provided:
+                print(
+                    f"WARNING: Perfect score but missing answers! raw_score={raw_score}, total={total_questions}"
+                )
+                # Recalculate - this shouldn't happen with fixed compare_answers, but safety check
+                raw_score = 0
+                for passage in passages:
+                    for question in passage.get("questions", []):
+                        qid = question.get("id")
+                        passage_id = passage.get("id")
+                        items = question.get("items", [])
+
+                        if items and len(items) > 0:
+                            # Recalculate for multi-item
+                            correct_answer_str = str(question.get("correct_answer", ""))
+                            correct_answers_dict = {}
+                            if correct_answer_str:
+                                pairs = [
+                                    p.strip() for p in correct_answer_str.split(",")
+                                ]
+                                for pair in pairs:
+                                    if ":" in pair:
+                                        item, answer = pair.split(":", 1)
+                                        correct_answers_dict[item.strip()] = (
+                                            answer.strip()
+                                        )
+
+                            for item in items:
+                                answer_key = f"reading_p{passage_id}_q{qid}_{item}"
+                                user_answer = answers.get(answer_key, "")
+                                if not user_answer or not user_answer.strip():
+                                    continue
+                                correct_answer = correct_answers_dict.get(item, "")
+                                if correct_answer and self.compare_answers(
+                                    user_answer, correct_answer
+                                ):
+                                    raw_score += 1
+                        else:
+                            # Single answer question
+                            user_answer = answers.get(
+                                f"reading_p{passage_id}_q{qid}", ""
+                            )
+                            if not user_answer or not user_answer.strip():
+                                continue
+                            correct_answer = str(question.get("correct_answer", ""))
+                            if self.compare_answers(user_answer, correct_answer):
+                                raw_score += 1
 
         # Logic:
         # - No answers → 0.0
@@ -767,22 +955,20 @@ Phân tích (TIẾNG VIỆT):
 
 JSON (TIẾNG VIỆT): {{"ielts_analysis":{{"reading":{{"strengths":[],"weaknesses":[],"question_type_analysis":{{}}}}, "listening":{{"strengths":[],"weaknesses":[],"question_type_analysis":{{}}}}, "writing":{{"task_achievement":{{"score":0,"strengths":[],"weaknesses":[]}}, "coherence_cohesion":{{"score":0,"strengths":[],"weaknesses":[]}}, "lexical_resource":{{"score":0,"strengths":[],"weaknesses":[]}}, "grammatical_range":{{"score":0,"strengths":[],"weaknesses":[]}}, "overall_assessment":""}}, "speaking":{{"fluency_coherence":{{"score":0,"strengths":[],"weaknesses":[]}}, "lexical_resource":{{"score":0,"strengths":[],"weaknesses":[]}}, "grammatical_range":{{"score":0,"strengths":[],"weaknesses":[]}}, "pronunciation":{{"score":0,"strengths":[],"weaknesses":[]}}, "overall_assessment":""}}}}}}"""
 
-        # Part 2: Beyond IELTS Analysis using Key 2 (ultra-compact Vietnamese)
-        beyond_prompt = f"""Beyond IELTS (TIẾNG VIỆT):
+        # Part 2: Beyond IELTS Analysis using Key 2 - Separate analysis for each skill
+        beyond_prompt = f"""Beyond IELTS (TIẾNG VIỆT) - Phân tích riêng từng kỹ năng:
 
 Scores: L={listening_score:.1f} R={reading_score:.1f} W={writing_score:.1f} S={speaking_score:.1f} O={overall_score:.1f}
-Data: W:{writing_summary if writing_summary else 'N/A'} S:{speaking_summary if speaking_summary else 'N/A'}
+Data: L:{listening_summary if listening_summary else 'N/A'} R:{reading_summary if reading_summary else 'N/A'} W:{writing_summary if writing_summary else 'N/A'} S:{speaking_summary if speaking_summary else 'N/A'}
 Samples: W:{writing_samples[:80] if writing_samples else 'N/A'} S:{speaking_samples[:80] if speaking_samples else 'N/A'}
 
-Phân tích (TIẾNG VIỆT):
-- Phản xạ: thấp/trung bình/cao
-- Tiếp thu: khả năng tiếp thu xử lý thông tin
-- Ngôn ngữ mẹ đẻ: dịch, từ vựng (tự nhiên/dịch máy), tác động L/R/S/W
-- Văn phạm: lỗi nghĩa, lỗi văn phạm, cấu trúc, không tự nhiên
-- Phát âm: rõ ràng, mạch lạc, nghe native, nhịp/nhấn, chính xác từ, âm đôi/đuôi
-- Từ vựng: mức (cơ bản/nâng cao), tự nhiên/dịch, đánh giá
+Phân tích riêng từng kỹ năng (TIẾNG VIỆT):
+- LISTENING: phản xạ nghe, tốc độ xử lý, khả năng nắm bắt thông tin, ảnh hưởng ngôn ngữ mẹ đẻ
+- READING: tốc độ đọc, khả năng hiểu, cách tiếp cận văn bản, ảnh hưởng ngôn ngữ mẹ đẻ
+- WRITING: văn phạm, từ vựng, cấu trúc, tự nhiên/dịch máy, lỗi nghĩa
+- SPEAKING: phát âm, nhịp điệu, từ vựng, văn phạm, phản xạ, tự nhiên
 
-JSON (TIẾNG VIỆT): {{"beyond_ielts":{{"reflex_level":"","reception_ability":"","mother_tongue_influence":{{"translation":"","vocabulary_usage":"","listening":"","reading":"","speaking":"","writing":""}}, "grammar":{{"meaning_errors":"","grammar_errors":"","structure_errors":"","unnatural":""}}, "pronunciation":{{"hard_to_understand":"","lack_coherence":"","native_comprehension":"","rhythm_stress":"","word_pronunciation":"","diphthongs_endings":""}}, "vocabulary":{{"level":"","natural_vs_translated":"","assessment":""}}}}}}"""
+JSON (TIẾNG VIỆT): {{"beyond_ielts":{{"listening":{{"reflex_level":"","processing_speed":"","comprehension_ability":"","mother_tongue_impact":"","assessment":""}}, "reading":{{"reading_speed":"","comprehension_ability":"","text_approach":"","mother_tongue_impact":"","assessment":""}}, "writing":{{"grammar_errors":"","vocabulary_level":"","structure_quality":"","natural_vs_translated":"","meaning_errors":"","assessment":""}}, "speaking":{{"pronunciation":"","rhythm_stress":"","vocabulary_usage":"","grammar_accuracy":"","reflex_level":"","naturalness":"","assessment":""}}, "overall":{{"reflex_level":"","reception_ability":"","mother_tongue_influence":"","key_strengths":"","key_weaknesses":""}}}}}}"""
 
         try:
             print("Generating IELTS analysis (using Key 1)...")

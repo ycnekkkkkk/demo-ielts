@@ -7,6 +7,7 @@ import { apiClient } from '@/lib/api'
 import SpeechRecorder from '@/components/SpeechRecorder'
 import InteractiveSpeaking from '@/components/InteractiveSpeaking'
 import UnifiedSpeaking from '@/components/UnifiedSpeaking'
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 // Function to get audio playback rate based on level
 function getAudioRate(level: string): number {
@@ -21,14 +22,14 @@ function getAudioRate(level: string): number {
 }
 
 // Component for Listening Section with audio playback
-function ListeningSection({ section, handleAnswerChange, level }: { section: any, handleAnswerChange: (key: string, value: string) => void, level: string }) {
+function ListeningSection({ section, handleAnswerChange, level, answers }: { section: any, handleAnswerChange: (key: string, value: string) => void, level: string, answers: any }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [hasPlayed, setHasPlayed] = useState(false)
   const [currentUtterance, setCurrentUtterance] = useState<SpeechSynthesisUtterance | null>(null)
 
   const playAudio = () => {
     if (!section.audio_transcript) {
-      alert('Không có audio transcript cho section này')
+      alert('No audio transcript for this section')
       return
     }
 
@@ -64,7 +65,7 @@ function ListeningSection({ section, handleAnswerChange, level }: { section: any
       setCurrentUtterance(utterance)
       speechSynthesis.speak(utterance)
     } else {
-      alert('Trình duyệt của bạn không hỗ trợ text-to-speech')
+      alert('Your browser does not support text-to-speech')
     }
   }
 
@@ -141,11 +142,33 @@ function ListeningSection({ section, handleAnswerChange, level }: { section: any
                   </label>
                 ))}
               </div>
+            ) : q.type === 'tf_ng' || q.type === 'true_false' ? (
+              <div className="mt-2">
+                <div className="space-y-2">
+                  {['True', 'False', 'Not Given'].map((option) => (
+                    <label key={option} className="flex items-center cursor-pointer p-2 rounded hover:bg-gray-50 transition-colors">
+                      <input
+                        type="radio"
+                        name={`listening_s${section.id}_q${q.id}`}
+                        value={option}
+                        checked={answers[`listening_s${section.id}_q${q.id}`] === option}
+                        onChange={(e) => handleAnswerChange(`listening_s${section.id}_q${q.id}`, e.target.value)}
+                        className="mr-3 w-4 h-4"
+                      />
+                      <span className="font-medium">{option}</span>
+                    </label>
+                  ))}
+                </div>
+                {/* <p className="text-xs text-gray-500 mt-2">
+                  <strong>Lưu ý:</strong> True = thông tin đúng, False = thông tin sai, Not Given = không có thông tin trong bài
+                </p> */}
+              </div>
             ) : (
               <input
                 type="text"
                 className="w-full border rounded px-3 py-2 mt-2"
-                placeholder="Nhập câu trả lời..."
+                placeholder="Enter your answer..."
+                value={answers[`listening_s${section.id}_q${q.id}`] || ''}
                 onChange={(e) => handleAnswerChange(`listening_s${section.id}_q${q.id}`, e.target.value)}
               />
             )}
@@ -169,7 +192,6 @@ function TestContent() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [waitingForResults, setWaitingForResults] = useState(false)
-  const [speakingCompleted, setSpeakingCompleted] = useState(false)
 
   useEffect(() => {
     if (!sessionId) {
@@ -218,12 +240,113 @@ function TestContent() {
     setContent(null)
     setAnswers({})
     setSubmitting(false)  // Reset submitting state when phase changes
-    setSpeakingCompleted(false)  // Reset speaking completed state when phase changes
     loadSession()
   }, [sessionId, phaseParam, router])
 
   const handleAnswerChange = (key: string, value: string) => {
     setAnswers({ ...answers, [key]: value })
+  }
+
+  // Function to count words
+  const countWords = (text: string): number => {
+    if (!text || !text.trim()) return 0
+    return text.trim().split(/\s+/).filter(word => word.length > 0).length
+  }
+
+  // Function to get word count status (for color coding)
+  const getWordCountStatus = (current: number, min: number, max: number): { color: string; message: string } => {
+    if (current === 0) {
+      return { color: 'text-gray-500', message: 'Not written' }
+    }
+    if (current < min) {
+      return { color: 'text-red-600', message: `Missing ${min - current} words` }
+    }
+    if (current > max) {
+      return { color: 'text-orange-600', message: `Exceeded ${current - max} words` }
+    }
+    return { color: 'text-green-600', message: 'Met target' }
+  }
+
+  // Component to render chart from structured data
+  const ChartRenderer = ({ chartData }: { chartData: any }) => {
+    if (!chartData || !chartData.type) {
+      return null
+    }
+
+    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6']
+
+    // Prepare data for charts
+    const chartDataArray = chartData.labels?.map((label: string, idx: number) => ({
+      name: label,
+      value: chartData.data?.[idx] || 0
+    })) || []
+
+    if (chartData.type === 'pie' || (chartData.type === 'bar' && chartDataArray.length <= 6)) {
+      return (
+        <div className="w-full">
+          <h4 className="text-lg font-semibold mb-3 text-center">{chartData.title || 'Chart'}</h4>
+          <ResponsiveContainer width="100%" height={350}>
+            <PieChart>
+              <Pie
+                data={chartDataArray}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={(props: any) => {
+                  const name = props.name || '';
+                  const percent = props.percent || 0;
+                  return `${name}: ${(percent * 100).toFixed(0)}%`;
+                }}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {chartDataArray.map((entry: any, index: number) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )
+    }
+
+    if (chartData.type === 'line') {
+      return (
+        <div className="w-full">
+          <h4 className="text-lg font-semibold mb-3 text-center">{chartData.title || 'Chart'}</h4>
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart data={chartDataArray}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" label={{ value: chartData.xAxis || '', position: 'insideBottom', offset: -5 }} />
+              <YAxis label={{ value: chartData.yAxis || '', angle: -90, position: 'insideLeft' }} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )
+    }
+
+    // Default to bar chart
+    return (
+      <div className="w-full">
+        <h4 className="text-lg font-semibold mb-3 text-center">{chartData.title || 'Chart'}</h4>
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart data={chartDataArray}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" label={{ value: chartData.xAxis || '', position: 'insideBottom', offset: -5 }} />
+            <YAxis label={{ value: chartData.yAxis || '', angle: -90, position: 'insideLeft' }} />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="value" fill="#3b82f6" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    )
   }
 
   const handleSubmit = async () => {
@@ -271,10 +394,10 @@ function TestContent() {
             <div className="absolute inset-0 w-24 h-24 mx-auto border-4 border-blue-200 rounded-2xl animate-spin border-t-transparent"></div>
           </div>
           <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            Đang tạo đề thi
+            Creating test
           </h2>
           <p className="text-gray-600 mb-6">
-            Hệ thống đang sử dụng AI để tạo đề thi phù hợp với trình độ của bạn...
+            The system is using AI to create a test suitable for your level...
           </p>
           <div className="flex items-center justify-center space-x-2">
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -300,13 +423,13 @@ function TestContent() {
             </div>
           </div>
           <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-            Đang xử lý kết quả
+            Processing results
           </h2>
           <p className="text-gray-600 mb-2">
-            Hệ thống đang chấm điểm và phân tích bài làm của bạn...
+            The system is grading and analyzing your answers...
           </p>
           <p className="text-sm text-gray-500 mb-6">
-            Vui lòng đợi trong giây lát
+            Please wait for a moment
           </p>
           <div className="flex items-center justify-center space-x-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -321,7 +444,7 @@ function TestContent() {
   if (!content) {
     return (
       <div className="text-center py-12">
-        <div className="text-xl text-red-600">Không tìm thấy nội dung đề thi</div>
+        <div className="text-xl text-red-600">No test content found</div>
       </div>
     )
   }
@@ -335,14 +458,14 @@ function TestContent() {
 
   // Determine time and question count based on phase type
   const getTimeLimit = () => {
-    return '30 phút'  // Both phases are 30 minutes
+    return '30 minutes'  // Both phases are 30 minutes
   }
 
   const getQuestionInfo = () => {
     if (showListening) {
-      return '4 sections, 20 câu hỏi'
+      return '4 sections, 20 questions'
     } else if (showReading) {
-      return '2 passages, 10 câu hỏi'
+      return '2 passages, 10 questions'
     }
     return ''
   }
@@ -356,7 +479,7 @@ function TestContent() {
         <div className="flex items-center space-x-4 text-blue-100">
           <span className="flex items-center">
             <span className="mr-2">⏱️</span>
-            Thời gian: <span className="font-semibold ml-1">{getTimeLimit()}</span>
+            Time: <span className="font-semibold ml-1">{getTimeLimit()}</span>
           </span>
           {(showListening || showReading) && (
             <span className="text-sm">
@@ -376,7 +499,7 @@ function TestContent() {
                 Listening
               </h2>
               <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
-                4 sections, 20 câu hỏi
+                4 sections, 20 questions
               </span>
             </div>
             {content.listening.sections?.map((section: any) => (
@@ -385,6 +508,7 @@ function TestContent() {
                 section={section}
                 handleAnswerChange={handleAnswerChange}
                 level={session?.level || 'intermediate'}
+                answers={answers}
               />
             ))}
           </div>
@@ -399,7 +523,7 @@ function TestContent() {
                 Reading
               </h2>
               <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-medium">
-                2 passages, 10 câu hỏi
+                2 passages, 10 questions
               </span>
             </div>
             {content.reading.passages?.map((passage: any) => (
@@ -418,6 +542,7 @@ function TestContent() {
                                 type="radio"
                                 name={`reading_p${passage.id}_q${q.id}`}
                                 value={opt.split('.')[0].trim()}
+                                checked={answers[`reading_p${passage.id}_q${q.id}`] === opt.split('.')[0].trim()}
                                 onChange={(e) => handleAnswerChange(`reading_p${passage.id}_q${q.id}`, e.target.value)}
                                 className="mr-2"
                               />
@@ -425,11 +550,100 @@ function TestContent() {
                             </label>
                           ))}
                         </div>
+                      ) : q.type === 'tf_ng' || q.type === 'true_false' ? (
+                        <div className="mt-2">
+                          <div className="space-y-2">
+                            {['True', 'False', 'Not Given'].map((option) => (
+                              <label key={option} className="flex items-center cursor-pointer p-2 rounded hover:bg-gray-50 transition-colors">
+                                <input
+                                  type="radio"
+                                  name={`reading_p${passage.id}_q${q.id}`}
+                                  value={option}
+                                  checked={answers[`reading_p${passage.id}_q${q.id}`] === option}
+                                  onChange={(e) => handleAnswerChange(`reading_p${passage.id}_q${q.id}`, e.target.value)}
+                                  className="mr-3 w-4 h-4"
+                                />
+                                <span className="font-medium">{option}</span>
+                              </label>
+                            ))}
+                          </div>
+                          {/* <p className="text-xs text-gray-500 mt-2">
+                            <strong>Lưu ý:</strong> True = thông tin đúng, False = thông tin sai, Not Given = không có thông tin trong bài
+                          </p> */}
+                        </div>
+                      ) : (q.type === 'matching' || q.type === 'matching_headings') && q.options ? (
+                        <div className="mt-2">
+                          {/* Check if this is multi-item matching (has items array or question mentions multiple paragraphs) */}
+                          {q.items && q.items.length > 0 ? (
+                            <div className="space-y-3">
+                              <p className="text-sm text-gray-700 mb-3 font-medium">{q.question}</p>
+                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div className="space-y-3">
+                                  {q.items.map((item: string, itemIdx: number) => {
+                                    const answerKey = `reading_p${passage.id}_q${q.id}_${item}`
+                                    return (
+                                      <div key={itemIdx} className="flex items-center gap-3">
+                                        <div className="font-semibold text-gray-700 min-w-[40px]">
+                                          Paragraph {item}:
+                                        </div>
+                                        <select
+                                          className="flex-1 border-2 border-gray-300 rounded-lg px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                                          value={answers[answerKey] || ''}
+                                          onChange={(e) => handleAnswerChange(answerKey, e.target.value)}
+                                        >
+                                          <option value="">-- Choose heading --</option>
+                                          {q.options.map((opt: string, optIdx: number) => {
+                                            const value = opt.includes('.') ? opt.split('.')[0].trim() : opt.trim()
+                                            const label = opt.includes('.') ? opt : opt
+                                            return (
+                                              <option key={optIdx} value={value}>
+                                                {label}
+                                              </option>
+                                            )
+                                          })}
+                                        </select>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">
+                                Match each paragraph with the most suitable heading from the list above.
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <select
+                                className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                                value={answers[`reading_p${passage.id}_q${q.id}`] || ''}
+                                onChange={(e) => handleAnswerChange(`reading_p${passage.id}_q${q.id}`, e.target.value)}
+                              >
+                                <option value="">-- Choose the answer --</option>
+                                {q.options.map((opt: string, idx: number) => {
+                                  // Handle both "A. Option text" and just "A" formats
+                                  const value = opt.includes('.') ? opt.split('.')[0].trim() : opt.trim()
+                                  const label = opt.includes('.') ? opt : opt
+                                  return (
+                                    <option key={idx} value={value}>
+                                      {label}
+                                    </option>
+                                  )
+                                })}
+                              </select>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {q.type === 'matching_headings'
+                                  ? 'Choose the heading that matches the paragraph'
+                                  : 'Match the question with the appropriate answer'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <input
                           type="text"
                           className="w-full border rounded px-3 py-2 mt-2"
-                          placeholder="Nhập câu trả lời..."
+                          placeholder="Enter your answer..."
+                          value={answers[`reading_p${passage.id}_q${q.id}`] || ''}
                           onChange={(e) => handleAnswerChange(`reading_p${passage.id}_q${q.id}`, e.target.value)}
                         />
                       )}
@@ -459,7 +673,6 @@ function TestContent() {
               part3={content.speaking.part3}
               onAnswer={(key, answer) => handleAnswerChange(key, answer)}
               answers={answers}
-              onComplete={() => setSpeakingCompleted(true)}
             />
           </div>
         )}
@@ -483,39 +696,70 @@ function TestContent() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xl font-semibold">Task 1: Describe Chart/Graph</h3>
                   <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
-                    50-80 từ
+                    50-80 words
                   </span>
                 </div>
                 <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-lg mb-4 border border-blue-200">
                   <div className="font-semibold mb-2 text-gray-800">Instructions:</div>
                   <div className="text-gray-700 mb-2">{content.writing.task1.instructions || "Summarise the information by selecting and reporting the main features, and make comparisons where relevant."}</div>
                 </div>
-                {content.writing.task1.chart_description && (
+                {(content.writing.task1.chart_data || content.writing.task1.chart_description) && (
                   <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-4">
-                    <div className="font-semibold text-blue-800 mb-2 flex items-center">
+                    <div className="font-semibold text-blue-800 mb-3 flex items-center">
                       <span className="mr-2">📊</span>
-                      Chart Description (Text Format)
+                      Chart Data
                     </div>
-                    <div className="text-gray-800 whitespace-pre-wrap bg-white p-3 rounded border border-blue-100">
-                      {content.writing.task1.chart_description}
-                    </div>
-                    <div className="text-xs text-gray-600 mt-2 italic">
-                      Note: This is a text description of the chart data. Use this information to write your response.
-                    </div>
+                    {content.writing.task1.chart_data ? (
+                      <div className="bg-white p-4 rounded border border-blue-100">
+                        <ChartRenderer chartData={content.writing.task1.chart_data} />
+                      </div>
+                    ) : content.writing.task1.chart_description ? (
+                      <div className="bg-white p-3 rounded border border-blue-100">
+                        <div className="text-sm text-gray-700 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                          {content.writing.task1.chart_description}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2 italic">
+                          Note: Chart data is provided as text. Analyze and describe the main features and trends.
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
                 <textarea
                   className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all resize-none"
                   rows={6}
-                  placeholder={`Viết ${content.writing.task1.word_limit || 50}-${content.writing.task1.word_limit || 80} từ...`}
+                  placeholder={`Write ${content.writing.task1.min_words || 50}-${content.writing.task1.max_words || 80} words...`}
+                  value={answers.writing_task1 || ''}
                   onChange={(e) => handleAnswerChange('writing_task1', e.target.value)}
                 />
                 <div className="flex items-center justify-between mt-2">
-                  <div className="text-sm text-gray-500">
-                    Mục tiêu: <span className="font-semibold">{content.writing.task1.word_limit || 50}-{content.writing.task1.word_limit || 80} từ</span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-sm text-gray-500">
+                      Target: <span className="font-semibold">{content.writing.task1.min_words || 50}-{content.writing.task1.max_words || 80} words</span>
+                    </div>
+                    <div className="text-sm font-semibold">
+                      | You have written: <span className={getWordCountStatus(
+                        countWords(answers.writing_task1 || ''),
+                        content.writing.task1.min_words || 50,
+                        content.writing.task1.max_words || 80
+                      ).color}>
+                        {countWords(answers.writing_task1 || '')} words
+                      </span>
+                    </div>
+                    <div className={`text-xs font-medium ${getWordCountStatus(
+                      countWords(answers.writing_task1 || ''),
+                      content.writing.task1.min_words || 50,
+                      content.writing.task1.max_words || 80
+                    ).color}`}>
+                      {getWordCountStatus(
+                        countWords(answers.writing_task1 || ''),
+                        content.writing.task1.min_words || 50,
+                        content.writing.task1.max_words || 80
+                      ).message}
+                    </div>
                   </div>
                   <div className="text-xs text-gray-400">
-                    Tip: Mô tả xu hướng và so sánh dữ liệu
+                    Tip: Describe the trend and compare the data
                   </div>
                 </div>
               </div>
@@ -527,7 +771,7 @@ function TestContent() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xl font-semibold">Task 2: Essay</h3>
                   <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-medium">
-                    100-120 từ
+                    100-120 words
                   </span>
                 </div>
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg mb-4 border border-purple-200">
@@ -537,46 +781,42 @@ function TestContent() {
                 <textarea
                   className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all resize-none"
                   rows={10}
-                  placeholder={`Viết bài luận ${content.writing.task2.word_limit || 100}-${content.writing.task2.word_limit || 120} từ...`}
+                  placeholder={`Write a essay ${content.writing.task2.min_words || 100}-${content.writing.task2.max_words || 120} words...`}
+                  value={answers.writing_task2 || ''}
                   onChange={(e) => handleAnswerChange('writing_task2', e.target.value)}
                 />
                 <div className="flex items-center justify-between mt-2">
-                  <div className="text-sm text-gray-500">
-                    Mục tiêu: <span className="font-semibold">{content.writing.task2.word_limit || 100}-{content.writing.task2.word_limit || 120} từ</span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-sm text-gray-500">
+                      Target: <span className="font-semibold">{content.writing.task2.min_words || 100}-{content.writing.task2.max_words || 120} words</span>
+                    </div>
+                    <div className="text-sm font-semibold">
+                      | You have written: <span className={getWordCountStatus(
+                        countWords(answers.writing_task2 || ''),
+                        content.writing.task2.min_words || 100,
+                        content.writing.task2.max_words || 120
+                      ).color}>
+                        {countWords(answers.writing_task2 || '')} words
+                      </span>
+                    </div>
+                    <div className={`text-xs font-medium ${getWordCountStatus(
+                      countWords(answers.writing_task2 || ''),
+                      content.writing.task2.min_words || 100,
+                      content.writing.task2.max_words || 120
+                    ).color}`}>
+                      {getWordCountStatus(
+                        countWords(answers.writing_task2 || ''),
+                        content.writing.task2.min_words || 100,
+                        content.writing.task2.max_words || 120
+                      ).message}
+                    </div>
                   </div>
                   <div className="text-xs text-gray-400">
-                    Tip: Viết rõ ràng, có cấu trúc và đủ số từ
+                    Tip: Write clearly, structurally and enough words
                   </div>
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Speaking Completed Modal */}
-        {speakingCompleted && showSpeaking && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 text-center"
-            >
-              <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
-                <span className="text-4xl">✅</span>
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-4">
-                Hoàn thành phần Speaking!
-              </h3>
-              <p className="text-gray-600 mb-6 text-lg">
-                Mời bạn đến với phần test tiếp theo
-              </p>
-              <button
-                onClick={() => setSpeakingCompleted(false)}
-                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg"
-              >
-                Tiếp tục →
-              </button>
-            </motion.div>
           </div>
         )}
 
@@ -590,7 +830,7 @@ function TestContent() {
               : 'bg-green-600 text-white hover:bg-green-700'
               }`}
           >
-            {submitting ? 'Đang xử lý...' : phase === 1 ? 'Nộp bài và tiếp tục →' : 'Nộp bài và xem kết quả →'}
+            {submitting ? 'Processing...' : phase === 1 ? 'Submit and continue →' : 'Submit and view results →'}
           </button>
         </div>
       </div>
@@ -604,7 +844,7 @@ export default function TestPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <div className="text-xl text-gray-600">Đang tải đề thi...</div>
+          <div className="text-xl text-gray-600">Loading test...</div>
         </div>
       </div>
     }>
