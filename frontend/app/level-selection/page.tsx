@@ -136,14 +136,14 @@ export default function LevelSelectionPage() {
                   {level.description}
                 </div>
 
-                {/* Band score indicator */}
+                {/* IELTS score indicator */}
                 <div className={`mt-4 pt-4 border-t ${selectedLevel === level.value ? 'border-white/20' : 'border-gray-200'}`}>
                   <div className={`text-xs font-medium ${selectedLevel === level.value ? 'text-white/80' : 'text-gray-500'}`}>
-                    {level.value === 'beginner' && 'Band 3.0-4.0'}
-                    {level.value === 'elementary' && 'Band 4.0-4.5'}
-                    {level.value === 'intermediate' && 'Band 5.0-5.5'}
-                    {level.value === 'upper_intermediate' && 'Band 6.0-6.5'}
-                    {level.value === 'advanced' && 'Band 7.0-8.0'}
+                    {level.value === 'beginner' && 'IELTS 3.0-4.0'}
+                    {level.value === 'elementary' && 'IELTS 4.0-4.5'}
+                    {level.value === 'intermediate' && 'IELTS 5.0-5.5'}
+                    {level.value === 'upper_intermediate' && 'IELTS 6.0-6.5'}
+                    {level.value === 'advanced' && 'IELTS 7.0-8.0'}
                   </div>
                 </div>
               </div>
