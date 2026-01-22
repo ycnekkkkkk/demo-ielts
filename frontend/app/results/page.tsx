@@ -596,9 +596,9 @@ function SpeakingAnalysis({ data }: { data: any }) {
   )
 }
 
-// Beyond IELTS Analysis Component
+// Beyond IELTS Analysis Component - Separate by skills
 function BeyondIELTSAnalysis({ data }: { data: any }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['reflex']))
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(['overall', 'listening']))
 
   const toggle = (id: string) => {
     setExpanded(prev => {
@@ -612,63 +612,194 @@ function BeyondIELTSAnalysis({ data }: { data: any }) {
     })
   }
 
+  // Skill configuration
+  const skills = [
+    { key: 'listening', icon: '🎧', title: 'Listening (Nghe hiểu)', color: 'blue' },
+    { key: 'reading', icon: '📖', title: 'Reading (Đọc hiểu)', color: 'purple' },
+    { key: 'writing', icon: '✍️', title: 'Writing (Viết)', color: 'green' },
+    { key: 'speaking', icon: '🎤', title: 'Speaking (Nói)', color: 'orange' },
+  ]
+
+  const renderSkillAnalysis = (skillKey: string, skillData: any, icon: string, title: string, color: string) => {
+    if (!skillData) return null
+
+    const colorClasses = {
+      blue: 'from-blue-50 to-cyan-50 border-blue-200 text-blue-700',
+      purple: 'from-purple-50 to-pink-50 border-purple-200 text-purple-700',
+      green: 'from-green-50 to-emerald-50 border-green-200 text-green-700',
+      orange: 'from-orange-50 to-amber-50 border-orange-200 text-orange-700',
+    }
+
+    const classes = colorClasses[color as keyof typeof colorClasses] || colorClasses.blue
+
+    return (
+      <CollapsibleSection
+        key={skillKey}
+        title={`${icon} ${title}`}
+        id={skillKey}
+        expanded={expanded.has(skillKey)}
+        onToggle={() => toggle(skillKey)}
+      >
+        <div className={`bg-gradient-to-br ${classes.split(' ')[0]} ${classes.split(' ')[1]} p-4 rounded-lg border ${classes.split(' ')[2]}`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(skillData).map(([key, value]: [string, any]) => {
+              if (!value || (typeof value === 'string' && value.trim() === '')) return null
+
+              const displayValue = typeof value === 'object' && value !== null && !Array.isArray(value)
+                ? JSON.stringify(value, null, 2)
+                : String(value || '')
+
+              const label = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+
+              return (
+                <div key={key} className="bg-white p-4 rounded-lg border border-gray-200">
+                  <div className={`font-semibold mb-2 ${classes.split(' ')[3]} text-sm`}>
+                    {label}
+                  </div>
+                  <div className="text-gray-700 text-sm whitespace-pre-wrap leading-relaxed">
+                    {displayValue}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {skillData.assessment && (
+            <div className="mt-4 pt-4 border-t border-gray-300">
+              <div className={`font-semibold mb-2 ${classes.split(' ')[3]}`}>Đánh giá tổng quan</div>
+              <div className="text-gray-700 leading-relaxed">{skillData.assessment}</div>
+            </div>
+          )}
+        </div>
+      </CollapsibleSection>
+    )
+  }
+
   return (
     <div className="space-y-4">
-      {/* Reflex & Reception */}
-      {(data.reflex_level || data.reception_ability) && (
+      {/* Overall Summary */}
+      {data.overall && (
         <div className="card">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {data.reflex_level && (
-              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-5 rounded-xl border border-blue-200">
-                <div className="font-semibold mb-2 text-gray-700 flex items-center">
-                  <span className="mr-2">⚡</span>
-                  Năng lực phản xạ
-                </div>
-                <div className="text-2xl font-bold text-blue-600 capitalize">{data.reflex_level}</div>
+          <CollapsibleSection
+            title="📊 Tổng quan năng lực"
+            id="overall"
+            expanded={expanded.has('overall')}
+            onToggle={() => toggle('overall')}
+          >
+            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-5 rounded-lg border border-indigo-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {data.overall.reflex_level && (
+                  <div className="bg-white p-4 rounded-lg border border-indigo-200">
+                    <div className="font-semibold mb-2 text-indigo-700 flex items-center">
+                      <span className="mr-2">⚡</span>
+                      Năng lực phản xạ
+                    </div>
+                    <div className="text-xl font-bold text-indigo-600 capitalize">{data.overall.reflex_level}</div>
+                  </div>
+                )}
+                {data.overall.reception_ability && (
+                  <div className="bg-white p-4 rounded-lg border border-indigo-200">
+                    <div className="font-semibold mb-2 text-indigo-700 flex items-center">
+                      <span className="mr-2">🧠</span>
+                      Khả năng tiếp thu
+                    </div>
+                    <div className="text-gray-700">{data.overall.reception_ability}</div>
+                  </div>
+                )}
+                {data.overall.mother_tongue_influence && (
+                  <div className="bg-white p-4 rounded-lg border border-indigo-200 md:col-span-2">
+                    <div className="font-semibold mb-2 text-indigo-700 flex items-center">
+                      <span className="mr-2">🌍</span>
+                      Ảnh hưởng ngôn ngữ mẹ đẻ
+                    </div>
+                    <div className="text-gray-700">{data.overall.mother_tongue_influence}</div>
+                  </div>
+                )}
+                {data.overall.key_strengths && (
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200 md:col-span-2">
+                    <div className="font-semibold mb-2 text-green-700 flex items-center">
+                      <span className="mr-2">✅</span>
+                      Điểm mạnh chính
+                    </div>
+                    <div className="text-gray-700">{data.overall.key_strengths}</div>
+                  </div>
+                )}
+                {data.overall.key_weaknesses && (
+                  <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 md:col-span-2">
+                    <div className="font-semibold mb-2 text-orange-700 flex items-center">
+                      <span className="mr-2">⚠️</span>
+                      Điểm cần cải thiện
+                    </div>
+                    <div className="text-gray-700">{data.overall.key_weaknesses}</div>
+                  </div>
+                )}
               </div>
-            )}
-            {data.reception_ability && (
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-xl border border-green-200">
-                <div className="font-semibold mb-2 text-gray-700 flex items-center">
-                  <span className="mr-2">🧠</span>
-                  Khả năng tiếp thu
-                </div>
-                <div className="text-gray-700">{data.reception_ability}</div>
-              </div>
-            )}
-          </div>
+            </div>
+          </CollapsibleSection>
         </div>
       )}
 
-      {/* Other sections with collapsible */}
-      {['mother_tongue_influence', 'grammar', 'pronunciation', 'vocabulary'].map((section) => {
-        if (!data[section]) return null
-        return (
-          <CollapsibleSection
-            key={section}
-            title={getSectionTitle(section)}
-            id={section}
-            expanded={expanded.has(section)}
-            onToggle={() => toggle(section)}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {Object.entries(data[section]).map(([key, value]: [string, any]) => {
-                // Handle if value is an object
-                const displayValue = typeof value === 'object' && value !== null && !Array.isArray(value)
-                  ? JSON.stringify(value, null, 2) // Show as formatted JSON
-                  : String(value || '')
+      {/* Individual Skills Analysis */}
+      {skills.map(({ key, icon, title, color }) =>
+        renderSkillAnalysis(key, data[key], icon, title, color)
+      )}
 
-                return (
-                  <div key={key} className="bg-gray-50 p-4 rounded-lg">
-                    <div className="font-semibold mb-2 text-gray-700 capitalize text-sm">{key.replace(/_/g, ' ')}</div>
-                    <div className="text-gray-700 text-sm whitespace-pre-wrap">{displayValue}</div>
+      {/* Legacy support - show old format if new format doesn't exist */}
+      {!data.listening && !data.reading && !data.writing && !data.speaking && (
+        <>
+          {(data.reflex_level || data.reception_ability) && (
+            <div className="card">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {data.reflex_level && (
+                  <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-5 rounded-xl border border-blue-200">
+                    <div className="font-semibold mb-2 text-gray-700 flex items-center">
+                      <span className="mr-2">⚡</span>
+                      Năng lực phản xạ
+                    </div>
+                    <div className="text-2xl font-bold text-blue-600 capitalize">{data.reflex_level}</div>
                   </div>
-                )
-              })}
+                )}
+                {data.reception_ability && (
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-xl border border-green-200">
+                    <div className="font-semibold mb-2 text-gray-700 flex items-center">
+                      <span className="mr-2">🧠</span>
+                      Khả năng tiếp thu
+                    </div>
+                    <div className="text-gray-700">{data.reception_ability}</div>
+                  </div>
+                )}
+              </div>
             </div>
-          </CollapsibleSection>
-        )
-      })}
+          )}
+
+          {['mother_tongue_influence', 'grammar', 'pronunciation', 'vocabulary'].map((section) => {
+            if (!data[section]) return null
+            return (
+              <CollapsibleSection
+                key={section}
+                title={getSectionTitle(section)}
+                id={section}
+                expanded={expanded.has(section)}
+                onToggle={() => toggle(section)}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Object.entries(data[section]).map(([key, value]: [string, any]) => {
+                    const displayValue = typeof value === 'object' && value !== null && !Array.isArray(value)
+                      ? JSON.stringify(value, null, 2)
+                      : String(value || '')
+
+                    return (
+                      <div key={key} className="bg-gray-50 p-4 rounded-lg">
+                        <div className="font-semibold mb-2 text-gray-700 capitalize text-sm">{key.replace(/_/g, ' ')}</div>
+                        <div className="text-gray-700 text-sm whitespace-pre-wrap">{displayValue}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CollapsibleSection>
+            )
+          })}
+        </>
+      )}
     </div>
   )
 }
