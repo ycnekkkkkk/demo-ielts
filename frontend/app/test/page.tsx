@@ -490,28 +490,70 @@ function TestContent() {
                         </div>
                       ) : (q.type === 'matching' || q.type === 'matching_headings') && q.options ? (
                         <div className="mt-2">
-                          <select
-                            className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                            value={answers[`reading_p${passage.id}_q${q.id}`] || ''}
-                            onChange={(e) => handleAnswerChange(`reading_p${passage.id}_q${q.id}`, e.target.value)}
-                          >
-                            <option value="">-- Choose the answer --</option>
-                            {q.options.map((opt: string, idx: number) => {
-                              // Handle both "A. Option text" and just "A" formats
-                              const value = opt.includes('.') ? opt.split('.')[0].trim() : opt.trim()
-                              const label = opt.includes('.') ? opt : opt
-                              return (
-                                <option key={idx} value={value}>
-                                  {label}
-                                </option>
-                              )
-                            })}
-                          </select>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {q.type === 'matching_headings'
-                              ? 'Choose the heading that matches the paragraph'
-                              : 'Match the question with the appropriate answer'}
-                          </p>
+                          {/* Check if this is multi-item matching (has items array or question mentions multiple paragraphs) */}
+                          {q.items && q.items.length > 0 ? (
+                            <div className="space-y-3">
+                              <p className="text-sm text-gray-700 mb-3 font-medium">{q.question}</p>
+                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div className="space-y-3">
+                                  {q.items.map((item: string, itemIdx: number) => {
+                                    const answerKey = `reading_p${passage.id}_q${q.id}_${item}`
+                                    return (
+                                      <div key={itemIdx} className="flex items-center gap-3">
+                                        <div className="font-semibold text-gray-700 min-w-[40px]">
+                                          Paragraph {item}:
+                                        </div>
+                                        <select
+                                          className="flex-1 border-2 border-gray-300 rounded-lg px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                                          value={answers[answerKey] || ''}
+                                          onChange={(e) => handleAnswerChange(answerKey, e.target.value)}
+                                        >
+                                          <option value="">-- Choose heading --</option>
+                                          {q.options.map((opt: string, optIdx: number) => {
+                                            const value = opt.includes('.') ? opt.split('.')[0].trim() : opt.trim()
+                                            const label = opt.includes('.') ? opt : opt
+                                            return (
+                                              <option key={optIdx} value={value}>
+                                                {label}
+                                              </option>
+                                            )
+                                          })}
+                                        </select>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">
+                                Match each paragraph with the most suitable heading from the list above.
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <select
+                                className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                                value={answers[`reading_p${passage.id}_q${q.id}`] || ''}
+                                onChange={(e) => handleAnswerChange(`reading_p${passage.id}_q${q.id}`, e.target.value)}
+                              >
+                                <option value="">-- Choose the answer --</option>
+                                {q.options.map((opt: string, idx: number) => {
+                                  // Handle both "A. Option text" and just "A" formats
+                                  const value = opt.includes('.') ? opt.split('.')[0].trim() : opt.trim()
+                                  const label = opt.includes('.') ? opt : opt
+                                  return (
+                                    <option key={idx} value={value}>
+                                      {label}
+                                    </option>
+                                  )
+                                })}
+                              </select>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {q.type === 'matching_headings'
+                                  ? 'Choose the heading that matches the paragraph'
+                                  : 'Match the question with the appropriate answer'}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <input
