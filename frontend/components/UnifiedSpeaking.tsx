@@ -76,10 +76,13 @@ export default function UnifiedSpeaking({
     const [errorMessage, setErrorMessage] = useState<string>('') // Error message for user
     const [isSubmitting, setIsSubmitting] = useState(false) // Track when submitting answer
     const [isCompleted, setIsCompleted] = useState(false) // Track if all questions are completed
+    const [preparationTime, setPreparationTime] = useState<number | null>(null) // Preparation time for Part 2 (60 seconds)
+    const [recordingTime, setRecordingTime] = useState<number>(0) // Recording time elapsed
     const recognitionRef = useRef<any>(null)
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
     const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
     const timeoutTimerRef = useRef<NodeJS.Timeout | null>(null)
+    const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
     const lastSpeechTimeRef = useRef<number>(0)
     const transcriptRef = useRef<string>('') // Keep latest transcript in ref
     const isRecordingRef = useRef<boolean>(false) // Track recording state in ref
@@ -173,6 +176,10 @@ export default function UnifiedSpeaking({
                             clearTimeout(timeoutTimerRef.current)
                             timeoutTimerRef.current = null
                         }
+                        if (recordingIntervalRef.current) {
+                            clearInterval(recordingIntervalRef.current)
+                            recordingIntervalRef.current = null
+                        }
 
                         // Submit immediately (no delay needed since we already stopped recognition)
                         const finalTranscriptToSave = transcriptRef.current.trim()
@@ -230,7 +237,7 @@ export default function UnifiedSpeaking({
                             }, 3000)
                         }
                     } else {
-                        // For interim results, set timer: if no speech for 3 seconds, auto-submit
+                        // For interim results, set timer: if no speech for longer period, auto-submit
                         // Reset silence timer whenever we get any speech
                         if (silenceTimerRef.current) {
                             clearTimeout(silenceTimerRef.current)
@@ -238,17 +245,19 @@ export default function UnifiedSpeaking({
                         }
 
                         if (isRecordingRef.current) {
+                            // Longer silence period: 7 seconds for Part 2, 5 seconds for others
+                            const silencePeriod = currentQuestion?.type === 'part2' ? 7000 : 5000
                             silenceTimerRef.current = setTimeout(() => {
                                 // Check if still recording and we have some transcript
                                 if (isRecordingRef.current && transcriptRef.current.trim().length > 0) {
-                                    // Double-check: verify no new speech in the last 3 seconds
+                                    // Double-check: verify no new speech in the last period
                                     const timeSinceLastSpeech = Date.now() - lastSpeechTimeRef.current
-                                    if (timeSinceLastSpeech >= 2900) { // Allow 100ms margin
-                                        console.log('Auto-submitting after 3 seconds of silence')
+                                    if (timeSinceLastSpeech >= silencePeriod - 100) { // Allow 100ms margin
+                                        console.log(`Auto-submitting after ${silencePeriod / 1000} seconds of silence`)
                                         autoSubmitAnswer()
                                     }
                                 }
-                            }, 3000)
+                            }, silencePeriod)
                         }
                     }
                 } else {
@@ -407,11 +416,18 @@ export default function UnifiedSpeaking({
             // Clear error message and submitting state when question changes
             setErrorMessage('')
             setIsSubmitting(false)
+            setRecordingTime(0)
+            setPreparationTime(null)
+            // Clear recording interval if exists
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current)
+                recordingIntervalRef.current = null
+            }
             console.log('Question loaded:', currentQuestion.answerKey, 'saved answer:', savedAnswer, 'isSubmitting reset to false')
         }
     }, [currentQuestionIndex, answers, currentQuestion])
 
-    // Continuous silence detection: check every 500ms if user has been silent for 3 seconds
+    // Continuous silence detection: check every 500ms if user has been silent
     useEffect(() => {
         if (!isRecording) return
 
@@ -430,10 +446,12 @@ export default function UnifiedSpeaking({
                 console.log(`Silence check: ${timeSinceLastSpeech}ms since last speech, transcript length: ${transcriptRef.current.trim().length}`)
             }
 
-            // If user has been silent for 3+ seconds and has some transcript, auto-submit
+            // Longer silence period: 7 seconds for Part 2, 5 seconds for others
+            const silencePeriod = currentQuestion?.type === 'part2' ? 7000 : 5000
+            // If user has been silent for the period and has some transcript, auto-submit
             // Only check if lastSpeechTimeRef was actually set (user has spoken at least once)
-            if (lastSpeechTimeRef.current > 0 && timeSinceLastSpeech >= 3000 && hasTranscript && recognitionRef.current) {
-                console.log('Auto-submitting via interval check after 3 seconds of silence')
+            if (lastSpeechTimeRef.current > 0 && timeSinceLastSpeech >= silencePeriod && hasTranscript && recognitionRef.current) {
+                console.log(`Auto-submitting via interval check after ${silencePeriod / 1000} seconds of silence`)
                 clearInterval(silenceCheckInterval)
                 autoSubmitAnswer()
             }
@@ -442,7 +460,7 @@ export default function UnifiedSpeaking({
         return () => {
             clearInterval(silenceCheckInterval)
         }
-    }, [isRecording])
+    }, [isRecording, currentQuestion])
 
     // Auto-read question when question changes (only if user has started)
     useEffect(() => {
@@ -462,6 +480,10 @@ export default function UnifiedSpeaking({
                 timeoutTimerRef.current = null
             }
 
+            // Reset timers
+            setRecordingTime(0)
+            setPreparationTime(null)
+
             speechSynthesis.cancel()
             setIsReadingQuestion(true)
             const utterance = new SpeechSynthesisUtterance(currentQuestion.question)
@@ -471,18 +493,54 @@ export default function UnifiedSpeaking({
 
             utterance.onend = () => {
                 setIsReadingQuestion(false)
-                // Auto-start recording after AI finishes reading
-                setTimeout(() => {
-                    startRecording()
-                }, 500)
+
+                // For Part 2, start 1 minute preparation time
+                if (currentQuestion.type === 'part2') {
+                    setPreparationTime(60) // 60 seconds preparation
+                    // Start countdown
+                    const prepInterval = setInterval(() => {
+                        setPreparationTime((prev) => {
+                            if (prev === null || prev <= 1) {
+                                clearInterval(prepInterval)
+                                // Preparation time over, start recording
+                                setTimeout(() => {
+                                    startRecording()
+                                }, 500)
+                                return null
+                            }
+                            return prev - 1
+                        })
+                    }, 1000)
+                } else {
+                    // For other parts, auto-start recording after AI finishes reading
+                    setTimeout(() => {
+                        startRecording()
+                    }, 500)
+                }
             }
 
             utterance.onerror = () => {
                 setIsReadingQuestion(false)
-                // Even on error, start recording
-                setTimeout(() => {
-                    startRecording()
-                }, 500)
+                // Even on error, handle based on question type
+                if (currentQuestion.type === 'part2') {
+                    setPreparationTime(60)
+                    const prepInterval = setInterval(() => {
+                        setPreparationTime((prev) => {
+                            if (prev === null || prev <= 1) {
+                                clearInterval(prepInterval)
+                                setTimeout(() => {
+                                    startRecording()
+                                }, 500)
+                                return null
+                            }
+                            return prev - 1
+                        })
+                    }, 1000)
+                } else {
+                    setTimeout(() => {
+                        startRecording()
+                    }, 500)
+                }
             }
 
             utteranceRef.current = utterance
@@ -524,14 +582,28 @@ export default function UnifiedSpeaking({
                 // This ensures silence detection works correctly
                 lastSpeechTimeRef.current = 0
 
-                // Set timeout: 1 minute without any response → auto skip
+                // Set timeout: longer for Part 2 (3 minutes), shorter for others (2 minutes)
+                const maxRecordingTime = currentQuestion?.type === 'part2' ? 180000 : 120000 // 3 min for Part 2, 2 min for others
                 timeoutTimerRef.current = setTimeout(() => {
                     if (isRecordingRef.current && transcriptRef.current.trim().length === 0) {
-                        // No response for 1 minute, skip to next question
-                        console.log('Auto-skipping after 1 minute with no response')
+                        // No response for max time, skip to next question
+                        console.log(`Auto-skipping after ${maxRecordingTime / 1000 / 60} minutes with no response`)
                         skipQuestion()
                     }
-                }, 60000) // 1 minute = 60000ms
+                }, maxRecordingTime)
+
+                // Start recording time counter
+                setRecordingTime(0) // Reset timer
+                recordingIntervalRef.current = setInterval(() => {
+                    if (isRecordingRef.current) {
+                        setRecordingTime((prev) => prev + 1)
+                    } else {
+                        if (recordingIntervalRef.current) {
+                            clearInterval(recordingIntervalRef.current)
+                            recordingIntervalRef.current = null
+                        }
+                    }
+                }, 1000)
             } catch (e: any) {
                 console.error('Error starting recognition:', e)
                 // If it's "already started", that's actually OK
@@ -563,6 +635,10 @@ export default function UnifiedSpeaking({
             if (timeoutTimerRef.current) {
                 clearTimeout(timeoutTimerRef.current)
                 timeoutTimerRef.current = null
+            }
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current)
+                recordingIntervalRef.current = null
             }
 
             // Show loading state
@@ -638,6 +714,10 @@ export default function UnifiedSpeaking({
                 clearTimeout(timeoutTimerRef.current)
                 timeoutTimerRef.current = null
             }
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current)
+                recordingIntervalRef.current = null
+            }
         }
     }
 
@@ -648,6 +728,8 @@ export default function UnifiedSpeaking({
 
         speechSynthesis.cancel()
         setIsReadingQuestion(false)
+        setPreparationTime(null)
+        setRecordingTime(0)
 
         // Clear timers
         if (silenceTimerRef.current) {
@@ -658,20 +740,43 @@ export default function UnifiedSpeaking({
             clearTimeout(timeoutTimerRef.current)
             timeoutTimerRef.current = null
         }
+        if (recordingIntervalRef.current) {
+            clearInterval(recordingIntervalRef.current)
+            recordingIntervalRef.current = null
+        }
 
         // Reset restart flags
         restartAttemptsRef.current = 0
         isRestartingRef.current = false
 
         if (currentQuestion) {
-            onAnswer(currentQuestion.answerKey, '')
+            // Save current answer (even if empty)
+            onAnswer(currentQuestion.answerKey, transcriptRef.current.trim() || '')
         }
 
-        setTimeout(() => {
-            if (currentQuestionIndex < allQuestions.length - 1) {
-                setCurrentQuestionIndex(currentQuestionIndex + 1)
-            }
-        }, 500)
+        // Check if this is the last question
+        const isLastQuestion = currentQuestionIndex === allQuestions.length - 1
+
+        if (isLastQuestion) {
+            // If it's the last question, end the speaking test
+            console.log('END button clicked - completing speaking test')
+            setIsCompleted(true)
+            setIsSubmitting(true) // Show loading state
+
+            setTimeout(() => {
+                setIsSubmitting(false)
+                if (onComplete) {
+                    onComplete()
+                }
+            }, 1000) // Brief delay to show completion
+        } else {
+            // If not the last question, move to next question
+            setTimeout(() => {
+                if (currentQuestionIndex < allQuestions.length - 1) {
+                    setCurrentQuestionIndex(currentQuestionIndex + 1)
+                }
+            }, 500)
+        }
     }
 
     const startSpeaking = () => {
@@ -741,14 +846,14 @@ export default function UnifiedSpeaking({
             <div className="bg-white rounded-lg p-6 mb-4 min-h-[200px] flex items-center justify-center">
                 {isCompleted || hasAnsweredLastQuestion ? (
                     <div className="text-center w-full">
-                        <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
+                        {/* <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
                             <span className="text-3xl">✅</span>
-                        </div>
+                        </div> */}
                         <h3 className="text-2xl font-bold text-gray-800 mb-2">
                             Đã hoàn thành phần Speaking!
                         </h3>
                         <p className="text-gray-600 text-lg mb-4">
-                            Bạn đã trả lời xong tất cả câu hỏi
+                            Các câu trả lời của bạn đã được lưu
                         </p>
                         <p className="text-sm text-gray-500">
                             Mời bạn tiếp tục với phần test tiếp theo
@@ -764,6 +869,25 @@ export default function UnifiedSpeaking({
                         <div className="inline-block w-4 h-4 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3"></div>
                         <p className="text-gray-600">AI is reading the question...</p>
                     </div>
+                ) : preparationTime !== null && preparationTime > 0 ? (
+                    <div className="text-center w-full">
+                        <div className="mb-4">
+                            <div className="text-6xl font-bold text-blue-600 mb-4">
+                                {preparationTime}
+                            </div>
+                            <p className="text-xl font-semibold text-gray-700 mb-2">
+                                Thời gian chuẩn bị
+                            </p>
+                            <p className="text-sm text-gray-600">
+                                Bạn có 1 phút để chuẩn bị cho câu trả lời
+                            </p>
+                        </div>
+                        <div className="bg-blue-50 rounded-lg p-4 mt-4">
+                            <p className="text-sm text-gray-700">
+                                <strong>Gợi ý:</strong> Suy nghĩ về các điểm chính, từ vựng và cấu trúc câu bạn sẽ sử dụng.
+                            </p>
+                        </div>
+                    </div>
                 ) : isSubmitting ? (
                     <div className="text-center">
                         <div className="inline-block w-4 h-4 border-4 border-green-600 border-t-transparent rounded-full animate-spin mb-3"></div>
@@ -775,12 +899,20 @@ export default function UnifiedSpeaking({
                         <div className="mb-4">
                             <span className="inline-block w-4 h-4 bg-red-600 rounded-full mr-2 animate-pulse"></span>
                             <span className="text-lg font-semibold text-red-600">Recording your answer...</span>
+                            <div className="mt-2 text-sm text-gray-600">
+                                Thời gian: {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
+                            </div>
                         </div>
                         <div className="bg-gray-50 rounded p-4 min-h-[100px]">
                             <p className="text-gray-700 text-sm">{transcript || 'Speak now...'}</p>
                         </div>
                         {!transcript && (
                             <p className="text-xs text-gray-500 mt-2">Make sure your microphone is working and speak clearly</p>
+                        )}
+                        {currentQuestion?.type === 'part2' && (
+                            <p className="text-xs text-blue-600 mt-2">
+                                Bạn có tối đa 3 phút để trả lời
+                            </p>
                         )}
                     </div>
                 ) : (
@@ -811,9 +943,12 @@ export default function UnifiedSpeaking({
                 {hasStarted && (
                     <button
                         onClick={skipQuestion}
-                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 font-medium"
+                        className={`px-4 py-2 rounded font-medium ${isLastQuestion
+                            ? 'bg-red-600 text-white hover:bg-red-700 font-semibold'
+                            : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                            }`}
                     >
-                        Skip This Question
+                        {isLastQuestion ? 'END' : 'Skip This Question'}
                     </button>
                 )}
             </div>
